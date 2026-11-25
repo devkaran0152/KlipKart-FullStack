@@ -1,0 +1,15 @@
+**/target/
+**/node_modules/
+**/dist/
+**/.settings/
+**/.classpath
+**/.project
+.env
+.env.*
+application-local.properties
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+.metadata/
+ecommerce/src/main/resources/application.properties

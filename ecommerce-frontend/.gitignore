@@ -1,0 +1,30 @@
+
+# Eclipse workspace
+.metadata/
+
+# Java / Spring Boot
+**/target/
+**/.settings/
+**/.classpath
+**/.project
+**/.factorypath
+
+# Never upload database credentials
+ecommerce/src/main/resources/application.properties
+
+# React
+**/node_modules/
+**/dist/
+
+# Duplicate backend
+order-management-backend/
+
+# Environment files
+.env
+.env.*
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
