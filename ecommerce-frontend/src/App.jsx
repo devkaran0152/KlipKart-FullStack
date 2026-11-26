@@ -11,6 +11,17 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // AI Chat States
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [chatMessages, setChatMessages] = useState([
+    {
+      role: 'assistant',
+      text: 'Hi! Welcome to Klipkart. I am your AI shopping assistant. Ask me about products, prices, or stock availability!'
+    }
+  ])
+
   // Fetch products from Spring Boot
   useEffect(() => {
     axios.get('http://localhost:8080/api/products')
@@ -26,56 +37,97 @@ function App() {
   }, [])
 
   // Add product to cart
-  
-
-async function handleAddToCart(product) {
-  try {
-    // Add one product to customer 1's backend cart
-    await axios.post(
-      'http://localhost:8080/api/cart/1/items',
-      null,
-      {
-        params: {
-          productId: product.id,
-          quantity: 1
+  async function handleAddToCart(product) {
+    try {
+      await axios.post(
+        'http://localhost:8080/api/cart/1/items',
+        null,
+        {
+          params: {
+            productId: product.id,
+            quantity: 1
+          }
         }
-      }
-    )
+      )
 
-    // Fetch the latest cart from backend
-    const response = await axios.get(
-      'http://localhost:8080/api/cart/1'
-    )
+      const response = await axios.get(
+        'http://localhost:8080/api/cart/1'
+      )
 
-    // Update React cart state
-    const updatedCart = response.data.map((item) => ({
-      id: item.productId,
-      itemId: item.itemId,
-      name: item.productName,
-      price: Number(item.price),
-      quantity: item.quantity,
-      totalPrice: Number(item.totalPrice)
-    }))
+      const updatedCart = response.data.map((item) => ({
+        id: item.productId,
+        itemId: item.itemId,
+        name: item.productName,
+        price: Number(item.price),
+        quantity: item.quantity,
+        totalPrice: Number(item.totalPrice),
+        stock: item.stock
+      }))
 
-    setCart(updatedCart)
+      setCart(updatedCart)
 
-    alert(product.name + ' added to cart successfully!')
+      alert(product.name + ' added to cart successfully!')
 
-  } catch (error) {
-    console.error('Cart error:', error)
-    console.error('Backend response:', error.response?.data)
+    } catch (error) {
+      console.error('Cart error:', error)
+      console.error('Backend response:', error.response?.data)
 
-    const errorMessage =
-      error.response?.data?.message ||
-      error.response?.data ||
-      error.message ||
-      'Unknown error'
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data ||
+        error.message ||
+        'Unknown error'
 
-    alert('Unable to add product: ' + errorMessage)
+      alert('Unable to add product: ' + errorMessage)
+    }
   }
-}
 
+  // Send message to AI backend
+  async function sendMessage() {
+    if (!chatInput.trim() || chatLoading) return
 
+    const message = chatInput.trim()
+
+    setChatMessages((previous) => [
+      ...previous,
+      { role: 'user', text: message }
+    ])
+
+    setChatInput('')
+    setChatLoading(true)
+
+    try {
+      const response = await axios.get(
+        'http://localhost:8080/api/ai/chat',
+        {
+          params: { message }
+        }
+      )
+
+      setChatMessages((previous) => [
+        ...previous,
+        {
+          role: 'assistant',
+          text: typeof response.data === 'string'
+            ? response.data
+            : JSON.stringify(response.data)
+        }
+      ])
+
+    } catch (error) {
+      console.error('AI Chat error:', error)
+
+      setChatMessages((previous) => [
+        ...previous,
+        {
+          role: 'assistant',
+          text: 'Sorry, I could not connect to the AI assistant. Please try again.'
+        }
+      ])
+    } finally {
+      setChatLoading(false)
+    }
+  }
 
   // Increase quantity
   function increaseQuantity(id) {
@@ -84,7 +136,10 @@ async function handleAddToCart(product) {
         item.id === id
           ? {
               ...item,
-              quantity: Math.min(item.quantity + 1, item.stock)
+              quantity: Math.min(
+                item.quantity + 1,
+                item.stock ?? item.quantity + 1
+              )
             }
           : item
       )
@@ -128,7 +183,7 @@ async function handleAddToCart(product) {
 
       {/* Navigation */}
       <header className="navbar">
-       <h2 className="logo">Klipkart</h2>
+        <h2 className="logo">Klipkart</h2>
 
         <nav>
           <a href="#home" onClick={() => setShowCart(false)}>Home</a>
@@ -226,9 +281,7 @@ async function handleAddToCart(product) {
                           disabled={product.quantity <= 0}
                           onClick={() => handleAddToCart(product)}
                         >
-                          {product.quantity > 0
-                            ? 'Add +'
-                            : 'Sold Out'}
+                          {product.quantity > 0 ? 'Add +' : 'Sold Out'}
                         </button>
                       </div>
                     </div>
@@ -301,7 +354,10 @@ async function handleAddToCart(product) {
                         <span>{item.quantity}</span>
 
                         <button
-                          disabled={item.quantity >= item.stock}
+                          disabled={
+                            item.stock != null &&
+                            item.quantity >= item.stock
+                          }
                           onClick={() => increaseQuantity(item.id)}
                         >
                           +
@@ -370,13 +426,118 @@ async function handleAddToCart(product) {
         </section>
       )}
 
+      {/* AI Shopping Assistant */}
+      <div className="chat-widget">
+
+        {chatOpen && (
+          <div className="chat-window">
+
+            <div className="chat-header">
+              <div>
+                <h3>Klipkart AI</h3>
+                <span>Your AI shopping assistant</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setChatOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="chat-messages">
+              {chatMessages.length === 1 && (
+  <div className="ai-suggestions">
+    <p>✨ Try asking me:</p>
+
+    <button onClick={() => {
+      setChatInput('Show me Samsung products')
+      setTimeout(() => {
+        document.querySelector('.chat-input-area button')?.click()
+      }, 100)
+    }}>
+      📱 Show Samsung products
+    </button>
+
+    <button onClick={() => {
+      setChatInput('Check stock for product ID 11')
+      setTimeout(() => {
+        document.querySelector('.chat-input-area button')?.click()
+      }, 100)
+    }}>
+      📦 Check product stock
+    </button>
+
+    <button onClick={() => {
+      setChatInput('Show me products under 20000')
+      setTimeout(() => {
+        document.querySelector('.chat-input-area button')?.click()
+      }, 100)
+    }}>
+      💰 Products under ₹20,000
+    </button>
+  </div>
+)}
+              {chatMessages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`chat-message ${message.role}`}
+                >
+                  {message.text}
+                </div>
+              ))}
+
+              {chatLoading && (
+                <div className="chat-message assistant">
+                  Thinking...
+                </div>
+              )}
+            </div>
+
+            <form
+              className="chat-input-area"
+              onSubmit={(event) => {
+                event.preventDefault()
+                sendMessage()
+              }}
+            >
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                placeholder="Ask about products or stock..."
+                disabled={chatLoading}
+              />
+
+              <button
+                type="submit"
+                disabled={chatLoading || !chatInput.trim()}
+              >
+                Send
+              </button>
+            </form>
+
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="chat-toggle"
+          onClick={() => setChatOpen((previous) => !previous)}
+        >
+          {chatOpen ? '× Close' : '💬 Ask AI'}
+        </button>
+
+      </div>
+
       {/* Footer */}
       <footer className="footer">
-  <h2>Klipkart</h2>
-  <p>Your one-stop destination for online shopping.</p>
-  <p>Created by Karan Kandu</p>
-  <p>© 2026 Klipkart. All rights reserved.</p>
-</footer>
+        <h2>Klipkart</h2>
+        <p>Your one-stop destination for online shopping.</p>
+        <p>Created by Karan Kandu</p>
+        <p>© 2026 Klipkart. All rights reserved.</p>
+      </footer>
 
     </div>
   )
